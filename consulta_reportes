@@ -1,0 +1,163 @@
+function doGet() {
+  const html = HtmlService.createTemplateFromFile("index").evaluate();
+  return html;
+}
+
+function getData(filterDate, filterProduccion, filterEjecutivo) {
+  const SS = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = SS.getSheetByName("Hoja 1");
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+
+  if (lastRow <= 1) {
+    return [];
+  }
+
+  // Define el rango de los últimos 7 días
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(today.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+
+  // Lee solo el rango de datos que contiene información
+  const allData = sheet.getRange(2, 1, lastRow - 1, lastCol).getDisplayValues();
+
+  // Filtra los datos directamente en memoria
+  const filteredData = allData.filter(row => {
+    const rowDateString = row[4]; // Columna E
+    const rowProduccion = row[21]; // Columna V
+    const rowEjecutivo = row[3]; // Columna D
+
+    if (!rowDateString || !rowProduccion || !rowEjecutivo) {
+      return false;
+    }
+
+    const [day, month, year] = rowDateString.split('/');
+    const rowDate = new Date(`${year}-${month}-${day}`);
+    rowDate.setHours(0, 0, 0, 0);
+
+    const isWithinSevenDays = (rowDate >= sevenDaysAgo && rowDate <= today);
+    const dateMatch = (!filterDate || rowDateString === filterDate);
+    const produccionMatch = (!filterProduccion || rowProduccion === filterProduccion);
+    const ejecutivoMatch = (!filterEjecutivo || rowEjecutivo === filterEjecutivo);
+
+    return isWithinSevenDays && dateMatch && produccionMatch && ejecutivoMatch;
+  });
+
+  return filteredData;
+}
+
+function getUniqueProduccionNames() {
+  const SS = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = SS.getSheetByName("Hoja 1");
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(today.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+
+  const lastRow = sheet.getLastRow();
+  const data = sheet.getRange(2, 5, lastRow - 1, 18).getDisplayValues();
+
+  const uniqueNames = new Set();
+  data.forEach(row => {
+    const rowDateString = row[0];
+    const produccionName = row[17];
+
+    if (rowDateString && produccionName) {
+      const [day, month, year] = rowDateString.split('/');
+      const rowDate = new Date(`${year}-${month}-${day}`);
+      rowDate.setHours(0, 0, 0, 0);
+
+      if (rowDate >= sevenDaysAgo && rowDate <= today) {
+        uniqueNames.add(produccionName);
+      }
+    }
+  });
+
+  return Array.from(uniqueNames).sort();
+}
+
+function getUniqueDates() {
+  const SS = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = SS.getSheetByName("Hoja 1");
+
+  const data = sheet.getRange("E:E").getDisplayValues();
+  data.shift();
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(today.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+
+  const validDates = new Set();
+  data.forEach(dateText => {
+    const parts = dateText[0].split('/');
+    if (parts.length === 3) {
+      const rowDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+      rowDate.setHours(0, 0, 0, 0);
+
+      if (rowDate >= sevenDaysAgo && rowDate <= today) {
+        validDates.add(dateText[0]);
+      }
+    }
+  });
+
+  const uniqueDates = Array.from(validDates).filter(date => date !== "");
+
+  const sortedDates = uniqueDates.sort((a, b) => {
+    const dateA = new Date(a.split('/').reverse().join('-'));
+    const dateB = new Date(b.split('/').reverse().join('-'));
+    return dateB - dateA;
+  });
+
+  const todayFormatted = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy");
+
+  const todayIndex = sortedDates.indexOf(todayFormatted);
+  if (todayIndex > -1) {
+    const todayOption = sortedDates.splice(todayIndex, 1)[0];
+    sortedDates.unshift(todayOption);
+  }
+
+  return sortedDates;
+}
+
+function getUniqueProduccionNamesByDate(filterDate) {
+  const SS = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = SS.getSheetByName("Hoja 1");
+
+  const data = sheet.getDataRange().getDisplayValues();
+  data.shift();
+
+  const filteredNames = new Set();
+  const filterDateString = filterDate;
+
+  data.forEach(row => {
+    const rowDateValue = row[4];
+    const produccionName = row[21];
+
+    if (produccionName && rowDateValue) {
+      if (rowDateValue === filterDateString) {
+        filteredNames.add(produccionName);
+      }
+    }
+  });
+
+  const uniqueNames = Array.from(filteredNames);
+  return uniqueNames.sort();
+}
+
+function getUniqueEjecutivos() {
+  const SS = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = SS.getSheetByName("Hoja 1");
+  const data = sheet.getRange("D:D").getDisplayValues();
+  data.shift();
+
+  const uniqueNames = [...new Set(data.flat())].filter(name => name !== "");
+  return uniqueNames.sort();
+}
